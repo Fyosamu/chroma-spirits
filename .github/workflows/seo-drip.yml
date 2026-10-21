@@ -1,0 +1,37 @@
+name: seo-drip
+
+# Daily IndexNow ping for this site's sitemap. Runs on GitHub only.
+# Key is fetched from the live host key file (same host, shared key).
+
+on:
+  schedule:
+    - cron: '15 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  indexnow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Submit sitemap URLs to IndexNow
+        run: |
+          KEY=$(curl -sS "https://fyosamu.github.io/indexnow-key.txt" | tr -d '[:space:]')
+          if [ -z "$KEY" ]; then echo "no key reachable"; exit 0; fi
+          URLS=$(python3 - <<'EOF'
+          import re, json
+          with open("sitemap.xml") as f:
+              urls = re.findall(r"<loc>\s*(.*?)\s*</loc>", f.read())
+          print(json.dumps(urls))
+          EOF
+          )
+          curl -sS -X POST "https://api.indexnow.org/indexnow" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "{\"host\":\"fyosamu.github.io\",\"key\":\"$KEY\",\"keyLocation\":\"https://fyosamu.github.io/$KEY.txt\",\"urlList\":$URLS}"
+          echo ""
+          echo "IndexNow submitted at $(date -u)"
+
